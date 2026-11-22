@@ -1,0 +1,44 @@
+name: Matchday Alerts
+
+on:
+  schedule:
+    # every 15 minutes between 08:00 and 22:59 UTC
+    - cron: "*/15 8-22 * * *"
+  workflow_dispatch:   # lets you run it by hand from the Actions tab
+    inputs:
+      flags:
+        description: "Optional: --demo (sample alerts) or --force (skip timing)"
+        required: false
+        default: ""
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get the code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install packages
+        run: pip install -r requirements.txt
+
+      - name: Get today's date
+        id: date
+        run: echo "today=$(date -u +%F)" >> "$GITHUB_OUTPUT"
+
+      # Keeps today's fixture list so we only fetch it once per day
+      - name: Restore fixture cache
+        uses: actions/cache@v4
+        with:
+          path: cache
+          key: fixtures-${{ steps.date.outputs.today }}
+
+      - name: Run the pipeline
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
+        run: python main.py ${{ github.event.inputs.flags }}

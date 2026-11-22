@@ -1,0 +1,33 @@
+{
+  "clubs": [
+    {
+      "name": "Barcelona"
+    }
+  ],
+  "leagues": [
+    "eng.1",
+    "esp.1",
+    "uefa.champions"
+  ],
+  "player_league": "eng.1",
+  "players": [
+    "Raya",
+    "Konsa",
+    "De Cuyper",
+    "Calafiori",
+    "Doku",
+    "Rogers",
+    "Gibbs-White",
+    "Palmer",
+    "Groß",
+    "Isak",
+    "Haaland",
+    "Dubravka",
+    "Mendy",
+    "Egan",
+    "Walle Egeli"
+  ],
+  "player_clubs": {
+    "Palmer": "Chelsea"
+  }
+}
