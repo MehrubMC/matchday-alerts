@@ -22,7 +22,7 @@ through GitHub Actions.
 2. **~75 min before kickoff:** pulls the official lineup from ESPN for Premier
    League matches and matches involving your watched clubs. It alerts you if a
    watched player is starting, on the bench, or left out of the matchday squad
-   entirely, and shows FPL injury news for players in that match. It also draws the starting XI in formation for watched
+   entirely, and shows FPL injury news for players in that match. It also draws the starting XI in formation, with the bench listed underneath, for watched
    clubs and for teams with one of your players (marked with *).
 
 If nothing relevant turns up, it sends nothing.

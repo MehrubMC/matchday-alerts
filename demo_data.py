@@ -1,9 +1,3 @@
-"""
-Fake match data used by `python main.py --demo`.
-Nothing here comes from a real API, it is only for showing the alerts.
-"""
-
-# Watched players with their club and FPL status (normally looked up from FPL)
 PLAYER_CLUBS = [
     {"name": "Haaland", "team": "Man City", "status": "a", "news": "",
      "chance": None},
@@ -13,7 +7,6 @@ PLAYER_CLUBS = [
      "chance": None},
 ]
 
-# Demo 1: Haaland is left out of the squad completely
 CITY_FIXTURE = {
     "id": "1", "league": "eng.1", "timestamp": 1800000000,
     "home": "Manchester City", "away": "Liverpool",
@@ -23,7 +16,6 @@ CITY_LINEUPS = [
     {
         "team": {"name": "Manchester City"},
         "formation": "4-1-4-1",
-        # goalkeeper first, then each row left to right
         "startXI": [
             {"player": {"name": "James Trafford"}, "place": 1},
             {"player": {"name": "Nico O'Reilly"}, "place": 2},
@@ -37,7 +29,11 @@ CITY_LINEUPS = [
             {"player": {"name": "Jeremy Doku"}, "place": 10},
             {"player": {"name": "Omar Marmoush"}, "place": 11},
         ],
-        "substitutes": [{"player": {"name": "Savinho"}}],
+        "substitutes": [{"player": {"name": "Stefan Ortega"}},
+            {"player": {"name": "Abdukodir Khusanov"}},
+            {"player": {"name": "Mateo Kovacic"}},
+            {"player": {"name": "Rayan Cherki"}},
+            {"player": {"name": "Savinho"}}],
     },
     {
         "team": {"name": "Liverpool"},
@@ -55,11 +51,14 @@ CITY_LINEUPS = [
             {"player": {"name": "Mohamed Salah"}, "place": 10},
             {"player": {"name": "Hugo Ekitike"}, "place": 11},
         ],
-        "substitutes": [{"player": {"name": "Alexander Isak"}}],
+        "substitutes": [{"player": {"name": "Alisson"}},
+            {"player": {"name": "Joe Gomez"}},
+            {"player": {"name": "Curtis Jones"}},
+            {"player": {"name": "Cody Gakpo"}},
+            {"player": {"name": "Alexander Isak"}}],
     },
 ]
 
-# Demo 2: Barcelona XI
 BARCA_FIXTURE = {
     "id": "2", "league": "esp.1", "timestamp": 1800000000,
     "home": "Barcelona", "away": "Real Madrid",
@@ -69,7 +68,6 @@ BARCA_LINEUPS = [
     {
         "team": {"name": "Barcelona"},
         "formation": "4-3-3",
-        # goalkeeper first, then defenders, midfielders, forwards (left to right)
         "startXI": [
             {"player": {"name": "Joan García"}, "place": 1},
             {"player": {"name": "João Cancelo"}, "place": 2},
@@ -83,7 +81,11 @@ BARCA_LINEUPS = [
             {"player": {"name": "Raphinha"}, "place": 10},
             {"player": {"name": "Lamine Yamal"}, "place": 11},
         ],
-        "substitutes": [],
+        "substitutes": [{"player": {"name": "Wojciech Szczesny"}},
+            {"player": {"name": "Eric Garcia"}},
+            {"player": {"name": "Gavi"}},
+            {"player": {"name": "Ferran Torres"}},
+            {"player": {"name": "Roony Bardghji"}}],
     },
     {
         "team": {"name": "Real Madrid"},
@@ -93,7 +95,6 @@ BARCA_LINEUPS = [
     },
 ]
 
-# Injuries as API-Football returns them (only Barcelona's get kept)
 BARCA_INJURIES = [
     {"player": {"name": "Dani Olmo", "type": "Missing Fixture",
                 "reason": "Hamstring"},

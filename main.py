@@ -1,35 +1,7 @@
-"""
-Matchday Lineup and Injury Alert Pipeline
-
-Each time this script runs it does two checks:
-  1. Pre-deadline check: about 120 minutes before the next FPL deadline,
-     look for injury news on your FPL players.
-  2. Lineup check: about 75 minutes before a kickoff, fetch the official
-     lineup from ESPN and alert if it involves your watchlist.
-
-GitHub Actions runs this every 15 minutes, so the script runs once and
-exits instead of looping forever.
-
-Data sources:
-  - ESPN's public soccer API: fixtures and lineups (free, no key)
-  - The official FPL API: injury news and which club each player is at
-    (free, no key)
-  - API-Football (optional, free plan): injuries for your watched clubs,
-    like Barcelona. Set API_FOOTBALL_KEY to turn it on. The free plan only
-    allows today's matches (about a day either side), which is all we need.
-
-Usage:
-    python main.py                  normal run (what GitHub Actions does)
-    python main.py --force          skip the timing windows (good for testing)
-    python main.py --test-alert     just send a test message to Discord
-    python main.py --demo           send sample alerts to Discord (for presenting)
-    python main.py --force --date 2026-11-08
-                                    replay a past matchday with real lineups
-"""
-
 import json
 import os
 import sys
+import textwrap
 import unicodedata
 from datetime import datetime, timezone
 
@@ -44,14 +16,10 @@ API_FOOTBALL_URL = "https://v3.football.api-sports.io"
 TIMEOUT_SECONDS = 15
 HEADERS = {"User-Agent": "matchday-alerts-student-project"}
 
-DEADLINE_MINUTES = 120   # injury check this long before the FPL deadline
-LINEUP_MINUTES = 75      # lineup check this long before kickoff
-WINDOW_MINUTES = 15      # must match how often the cron job runs
+DEADLINE_MINUTES = 120
+LINEUP_MINUTES = 75
+WINDOW_MINUTES = 15
 
-
-# ---------------------------------------------------------------
-# Small helpers
-# ---------------------------------------------------------------
 
 def log(text):
     print("[" + datetime.now(timezone.utc).strftime("%H:%M:%S") + "] " + text)
@@ -63,7 +31,6 @@ def load_watchlist(path="watchlist.json"):
 
 
 def get_json(url, params=None, extra_headers=None):
-    """Make a GET request and return the JSON, or None if anything fails."""
     headers = dict(HEADERS)
     if extra_headers:
         headers.update(extra_headers)
@@ -81,7 +48,6 @@ def get_json(url, params=None, extra_headers=None):
 
 
 def get_option_value(arguments, option):
-    """For '--date 2026-11-08' return '2026-11-08' (or None if missing)."""
     for index in range(len(arguments)):
         if arguments[index] == option and index + 1 < len(arguments):
             return arguments[index + 1]
@@ -93,18 +59,12 @@ def minutes_until(target_time, now):
 
 
 def in_window(minutes_left, target_minutes):
-    """True if we are inside the check window for this target time."""
     low = target_minutes - (WINDOW_MINUTES / 2)
     high = target_minutes + (WINDOW_MINUTES / 2)
     return low < minutes_left <= high
 
 
-# ---------------------------------------------------------------
-# Matching names against the watchlist
-# ---------------------------------------------------------------
-
 def clean_name(text):
-    """Lowercase and strip accents so 'Groß' and 'Gross' compare equal."""
     text = text.replace("ß", "ss")
     text = unicodedata.normalize("NFKD", text)
     result = ""
@@ -115,7 +75,6 @@ def clean_name(text):
 
 
 def split_into_words(text):
-    """Split a name into words, also splitting hyphens ('Egan-Riley')."""
     words = []
     for word in clean_name(text).split(" "):
         if word == "":
@@ -128,17 +87,11 @@ def split_into_words(text):
 
 
 def name_matches(watch_name, other_name):
-    """
-    Sites write names differently ('E. Haaland' or 'Erling Haaland'), so
-    we compare the last word of the watchlist name against the words in
-    the other name.
-    """
     watch_words = clean_name(watch_name).split(" ")
     last_word = watch_words[len(watch_words) - 1]
     return last_word in split_into_words(other_name)
 
 
-# FPL and ESPN write some club names differently
 TEAM_ALIASES = {
     "man city": "manchester city",
     "man utd": "manchester united",
@@ -148,7 +101,6 @@ TEAM_ALIASES = {
 
 
 def team_names_match(first_name, second_name):
-    """Compare club names, e.g. FPL 'Man City' vs ESPN 'Manchester City'."""
     first = clean_name(first_name)
     second = clean_name(second_name)
     if first in TEAM_ALIASES:
@@ -165,17 +117,7 @@ def is_watched_club(team_name, watchlist):
     return False
 
 
-# ---------------------------------------------------------------
-# FPL data: which club each player is at, and their injury news
-# ---------------------------------------------------------------
-
 def pick_player_clubs(fpl_data, watchlist):
-    """
-    Look up each watchlist player in the FPL data.
-    Returns a list of dicts with name, team, status, news and chance.
-    If a name matches more than one player, add the club you mean to
-    "player_clubs" in watchlist.json. Otherwise that player is skipped.
-    """
     team_names = {}
     for team in fpl_data["teams"]:
         team_names[team["id"]] = team["name"]
@@ -214,7 +156,6 @@ def pick_player_clubs(fpl_data, watchlist):
 
 
 def find_fpl_flags(player_clubs):
-    """Players whose FPL status is not 'available' or who have news."""
     flags = []
     for player in player_clubs:
         if player["status"] != "a" or player["news"]:
@@ -223,7 +164,6 @@ def find_fpl_flags(player_clubs):
 
 
 def get_next_fpl_deadline(fpl_data):
-    """Return (gameweek name, deadline datetime) for the next gameweek."""
     for event in fpl_data["events"]:
         if event.get("is_next"):
             deadline = datetime.strptime(event["deadline_time"],
@@ -241,10 +181,6 @@ def describe_flag(flag):
         news = "No details given"
     return flag["name"] + " (" + flag["team"] + ")" + chance + ": " + news
 
-
-# ---------------------------------------------------------------
-# Check 1: injury news before the FPL deadline
-# ---------------------------------------------------------------
 
 def build_deadline_message(gameweek, flags):
     lines = ["**Pre-deadline injury check** (" + gameweek + ")", ""]
@@ -272,17 +208,11 @@ def run_early_injury_check(now, force, fpl_data, player_clubs):
     return [build_deadline_message(gameweek, flags)]
 
 
-# ---------------------------------------------------------------
-# ESPN: fixtures and lineups
-# ---------------------------------------------------------------
-
 def parse_espn_time(text):
-    """ESPN times look like '2026-11-14T15:00Z'. Returns a UTC timestamp."""
     return datetime.fromisoformat(text.replace("Z", "+00:00")).timestamp()
 
 
 def parse_scoreboard(data, league):
-    """Turn an ESPN scoreboard response into a simple list of fixtures."""
     fixtures = []
     for event in data.get("events", []):
         home = ""
@@ -307,7 +237,6 @@ def parse_scoreboard(data, league):
 
 
 def is_relevant_fixture(fixture, watchlist):
-    """A fixture matters if it is in your FPL league or has a watched club."""
     if fixture["league"] == watchlist["player_league"]:
         return True
     if is_watched_club(fixture["home"], watchlist):
@@ -318,10 +247,6 @@ def is_relevant_fixture(fixture, watchlist):
 
 
 def get_todays_fixtures(today_text, watchlist):
-    """
-    Fetch today's fixtures for each league in the watchlist. The result is
-    saved in cache/ so the many runs in one day only fetch once.
-    """
     path = "cache/fixtures-" + today_text + ".json"
     if os.path.exists(path):
         with open(path, "r", encoding="utf-8") as file:
@@ -330,7 +255,6 @@ def get_todays_fixtures(today_text, watchlist):
     relevant = []
     failed = False
     for league in watchlist["leagues"]:
-        # ESPN only accepts ONE date per request, in YYYYMMDD format
         data = get_json(ESPN_URL + "/" + league + "/scoreboard",
                         {"dates": today_text.replace("-", "")})
         if data is None:
@@ -341,7 +265,7 @@ def get_todays_fixtures(today_text, watchlist):
                 relevant.append(fixture)
 
     if failed:
-        return relevant   # don't cache a partial result
+        return relevant
 
     os.makedirs("cache", exist_ok=True)
     with open(path, "w", encoding="utf-8") as file:
@@ -350,7 +274,6 @@ def get_todays_fixtures(today_text, watchlist):
 
 
 def get_place_number(entry):
-    """ESPN numbers the starters 1 to 11 in 'formationPlace' (1 = goalkeeper)."""
     place = str(entry.get("formationPlace", ""))
     if place.isdigit():
         return int(place)
@@ -362,10 +285,6 @@ def get_place(item):
 
 
 def parse_espn_rosters(summary_data):
-    """
-    Turn an ESPN match summary into a list of lineups, one per team.
-    Before the lineup is announced the names are empty, so startXI is empty.
-    """
     lineups = []
     for team_roster in summary_data.get("rosters", []):
         starters = []
@@ -379,7 +298,7 @@ def parse_espn_rosters(summary_data):
                 starters.append(item)
             else:
                 substitutes.append(item)
-        starters.sort(key=get_place)   # goalkeeper first, then by position
+        starters.sort(key=get_place)
         lineups.append({
             "team": {"name": team_roster.get("team", {}).get("displayName", "")},
             "formation": team_roster.get("formation") or "?",
@@ -397,12 +316,7 @@ def fetch_lineups(fixture):
     return parse_espn_rosters(data)
 
 
-# ---------------------------------------------------------------
-# API-Football (optional): injuries for watched clubs
-# ---------------------------------------------------------------
-
 def api_football_get(path, params):
-    """Call API-Football. Returns the 'response' list, or None on any problem."""
     key = os.getenv("API_FOOTBALL_KEY")
     if not key:
         return None
@@ -417,7 +331,6 @@ def api_football_get(path, params):
 
 
 def get_api_football_fixtures(today_text):
-    """Today's matches from API-Football (cached, so 1 request per day)."""
     path = "cache/apifootball-fixtures-" + today_text + ".json"
     if os.path.exists(path):
         with open(path, "r", encoding="utf-8") as file:
@@ -442,7 +355,6 @@ def get_api_football_fixtures(today_text):
 
 
 def find_api_fixture_id(api_fixtures, fixture):
-    """Match an ESPN fixture to the same match in API-Football by team names."""
     for api_fixture in api_fixtures:
         if (team_names_match(fixture["home"], api_fixture["home"])
                 and team_names_match(fixture["away"], api_fixture["away"])):
@@ -451,7 +363,6 @@ def find_api_fixture_id(api_fixtures, fixture):
 
 
 def filter_club_injuries(items, watchlist):
-    """Keep only injuries for players on a watched club."""
     kept = []
     for item in items:
         if is_watched_club(item["team"]["name"], watchlist):
@@ -478,17 +389,9 @@ def get_club_injuries(fixture, today_text, watchlist):
     return filter_club_injuries(items, watchlist)
 
 
-# ---------------------------------------------------------------
-# Check 2: official lineups before kickoff
-# ---------------------------------------------------------------
-
 def find_omitted_players(team_lineup, player_clubs):
-    """
-    Watched players whose club has a published lineup but who are
-    neither starting nor on the bench.
-    """
     if len(team_lineup["startXI"]) == 0:
-        return []   # lineup not published yet, so we can't say anyone is out
+        return []
 
     omitted = []
     for player in player_clubs:
@@ -509,7 +412,6 @@ def find_omitted_players(team_lineup, player_clubs):
 
 
 def parse_formation(formation):
-    """'4-3-3' becomes [4, 3, 3]. Returns [] if it isn't a normal formation."""
     numbers = []
     for part in str(formation).split("-"):
         if not part.isdigit():
@@ -523,7 +425,6 @@ NAME_PARTS = ["de", "van", "ter", "von", "da", "dos", "di", "le", "el",
 
 
 def short_name(full_name):
-    """'Lamine Yamal' becomes 'Yamal', 'Frenkie de Jong' becomes 'de Jong'."""
     words = full_name.split(" ")
     name = words[len(words) - 1]
     if len(words) > 2 and words[len(words) - 2].lower() in NAME_PARTS:
@@ -531,37 +432,52 @@ def short_name(full_name):
     return name[:14]
 
 
-def draw_formation(team_name, formation, starters, watched_names=None):
-    """
-    Draw the starting XI in its formation shape, attackers at the top.
-    Players from your watchlist get a * after their name.
-    Returns "" if the lineup isn't a normal 11-player formation.
-    """
+def is_watched_name(full_name, watched_names):
+    for watched in watched_names:
+        if name_matches(watched, full_name):
+            return True
+    return False
+
+
+def label_player(full_name, watched_names):
+    label = short_name(full_name)
+    if is_watched_name(full_name, watched_names):
+        label = label + "*"
+    return label
+
+
+def bench_lines(substitutes, watched_names):
+    if len(substitutes) == 0:
+        return []
+    labels = []
+    for entry in substitutes:
+        labels.append(label_player(entry["player"]["name"], watched_names))
+    return textwrap.wrap("Bench: " + ", ".join(labels), width=42,
+                         subsequent_indent="       ")
+
+
+def draw_formation(team_name, formation, starters, watched_names=None,
+                   substitutes=None):
     if watched_names is None:
         watched_names = []
+    if substitutes is None:
+        substitutes = []
     rows = parse_formation(formation)
     if len(starters) != 11 or sum(rows) != 10:
         return ""
 
     names = []
-    marked_any = False
     for entry in starters:
-        full_name = entry["player"]["name"]
-        label = short_name(full_name)
-        for watched in watched_names:
-            if name_matches(watched, full_name):
-                label = label + "*"
-                marked_any = True
-        names.append(label)
+        names.append(label_player(entry["player"]["name"], watched_names))
+    bench = bench_lines(substitutes, watched_names)
 
-    # Names are in goalkeeper-first order, so slice them into rows
     row_texts = []
     position = 1
     for count in rows:
         row_texts.append("   ".join(names[position:position + count]))
         position = position + count
-    row_texts.reverse()          # attackers at the top
-    row_texts.append(names[0])   # goalkeeper at the bottom
+    row_texts.reverse()
+    row_texts.append(names[0])
 
     width = 0
     for text in row_texts:
@@ -571,6 +487,14 @@ def draw_formation(team_name, formation, starters, watched_names=None):
     lines = ["```", team_name + " (" + str(formation) + ")", ""]
     for text in row_texts:
         lines.append(text.center(width).rstrip())
+    if len(bench) > 0:
+        lines.append("")
+        lines = lines + bench
+
+    marked_any = False
+    for line in lines:
+        if "*" in line:
+            marked_any = True
     if marked_any:
         lines.append("")
         lines.append("* = on your watchlist")
@@ -580,12 +504,10 @@ def draw_formation(team_name, formation, starters, watched_names=None):
 
 def build_lineup_message(fixture, lineups, flags, watchlist, player_clubs,
                          club_injuries=None):
-    """Build the Discord message for one match. Returns "" if nothing matters."""
     if club_injuries is None:
         club_injuries = []
     lines = []
 
-    # Starting XI for watched clubs and for teams with one of your players
     for team_lineup in lineups:
         team_name = team_lineup["team"]["name"]
 
@@ -599,15 +521,18 @@ def build_lineup_message(fixture, lineups, flags, watchlist, player_clubs,
             for entry in team_lineup["startXI"]:
                 starters.append(entry["player"]["name"])
             shape = draw_formation(team_name, team_lineup["formation"],
-                                   team_lineup["startXI"], team_watched)
+                                   team_lineup["startXI"], team_watched,
+                                   team_lineup["substitutes"])
             if shape != "":
                 lines.append(shape)
             elif len(starters) > 0:
                 lines.append("**" + team_name + " XI** ("
                              + str(team_lineup["formation"]) + "): "
                              + ", ".join(starters))
+                for bench_line in bench_lines(team_lineup["substitutes"],
+                                              team_watched):
+                    lines.append(bench_line)
 
-    # Starter/bench status for watched players
     for team_lineup in lineups:
         team_name = team_lineup["team"]["name"]
         for player in player_clubs:
@@ -622,13 +547,11 @@ def build_lineup_message(fixture, lineups, flags, watchlist, player_clubs,
                     lines.append("- " + player["name"] + " ("
                                  + team_name + ") is on the BENCH")
 
-    # Watched players missing from both the XI and the bench
     for team_lineup in lineups:
         for player in find_omitted_players(team_lineup, player_clubs):
             lines.append("- " + player["name"] + " (" + player["team"]
                          + ") is NOT in the matchday squad")
 
-    # FPL injury news for watched players in this match
     news_lines = []
     for flag in flags:
         if (team_names_match(flag["team"], fixture["home"])
@@ -638,7 +561,6 @@ def build_lineup_message(fixture, lineups, flags, watchlist, player_clubs,
         lines.append("**Injury news:**")
         lines = lines + news_lines
 
-    # Injuries for watched clubs (from API-Football, if a key is set)
     if len(club_injuries) > 0:
         lines.append("**Out / doubtful (club news):**")
         for item in club_injuries:
@@ -687,10 +609,6 @@ def run_lineup_check(fixtures, now, watchlist, force, player_clubs=None,
     return messages
 
 
-# ---------------------------------------------------------------
-# Sending to Discord
-# ---------------------------------------------------------------
-
 def send_discord(message):
     url = os.getenv("DISCORD_WEBHOOK_URL")
     if not url:
@@ -704,7 +622,6 @@ def send_discord(message):
     try:
         response = requests.post(url, json={"content": message},
                                  timeout=TIMEOUT_SECONDS)
-        # Discord answers 204 No Content when the webhook works
         if response.status_code in (200, 204):
             log("Alert sent to Discord.")
             return True
@@ -715,12 +632,7 @@ def send_discord(message):
         return False
 
 
-# ---------------------------------------------------------------
-# Main
-# ---------------------------------------------------------------
-
 def send_demo_alerts(watchlist):
-    """Send two sample alerts built from fake data, so you can show the flow."""
     log("Demo mode: sending sample alerts built from fake data.")
     flags = find_fpl_flags(demo_data.PLAYER_CLUBS)
     first = build_lineup_message(demo_data.CITY_FIXTURE, demo_data.CITY_LINEUPS,
@@ -751,7 +663,6 @@ def main():
     now = datetime.now(timezone.utc)
     today_text = now.strftime("%Y-%m-%d")
 
-    # --date lets you replay a past matchday (use it together with --force)
     date_option = get_option_value(arguments, "--date")
     if date_option is not None:
         try:
@@ -764,7 +675,6 @@ def main():
 
     messages = []
 
-    # FPL data: club lookups and injury news (one request, no key needed)
     player_clubs = []
     fpl_data = get_json(FPL_URL + "/bootstrap-static/")
     if fpl_data is not None:
@@ -772,7 +682,6 @@ def main():
         messages = messages + run_early_injury_check(now, force, fpl_data,
                                                      player_clubs)
 
-    # ESPN data: today's fixtures and lineups
     fixtures = get_todays_fixtures(today_text, watchlist)
     if len(fixtures) == 0:
         log("No relevant fixtures today.")

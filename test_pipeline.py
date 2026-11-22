@@ -1,8 +1,3 @@
-"""
-Tests using fake (mock) data, so no internet is needed.
-Run with:  python -m unittest test_pipeline.py -v
-"""
-
 import os
 import unittest
 from datetime import datetime, timezone
@@ -305,8 +300,8 @@ class TestFormationDrawing(unittest.TestCase):
         shape = main.draw_formation("Barcelona", "4-3-3", FULL_XI)
         lines = shape.split("\n")
         self.assertEqual(lines[1], "Barcelona (4-3-3)")
-        self.assertIn("Lewandowski", lines[3])   # attackers first
-        self.assertIn("Garcia", lines[len(lines) - 2])   # keeper last
+        self.assertIn("Lewandowski", lines[3])
+        self.assertIn("Garcia", lines[len(lines) - 2])
 
     def test_incomplete_lineup_is_not_drawn(self):
         self.assertEqual(main.draw_formation("Barcelona", "4-3-3",
@@ -368,6 +363,40 @@ class TestWatchedMarkers(unittest.TestCase):
         message = main.build_lineup_message(CITY_FIXTURE, [lineup], [],
                                             WATCHLIST, [])
         self.assertEqual(message, "")
+
+
+class TestBench(unittest.TestCase):
+    BENCH = make_xi(["Wojciech Szczesny", "Eric Garcia", "Gavi"])
+
+    def test_bench_is_listed_under_the_shape(self):
+        shape = main.draw_formation("Barcelona", "4-3-3", FULL_XI, [],
+                                    self.BENCH)
+        self.assertIn("Bench: Szczesny, Garcia, Gavi", shape)
+
+    def test_watched_bench_player_gets_a_star(self):
+        shape = main.draw_formation("Barcelona", "4-3-3", FULL_XI, ["Gavi"],
+                                    self.BENCH)
+        self.assertIn("Gavi*", shape)
+        self.assertIn("* = on your watchlist", shape)
+
+    def test_empty_bench_adds_no_bench_line(self):
+        shape = main.draw_formation("Barcelona", "4-3-3", FULL_XI, [], [])
+        self.assertNotIn("Bench", shape)
+
+    def test_long_bench_wraps_inside_the_block(self):
+        many = make_xi(["Player Numberone", "Player Numbertwo",
+                        "Player Numberthree", "Player Numberfour",
+                        "Player Numberfive", "Player Numbersix"])
+        shape = main.draw_formation("Barcelona", "4-3-3", FULL_XI, [], many)
+        for line in shape.split("\n"):
+            self.assertLessEqual(len(line), 42)
+
+    def test_bench_shows_when_formation_cannot_be_drawn(self):
+        lineup = {"team": {"name": "Barcelona"}, "formation": "4-3-3",
+                  "startXI": FULL_XI[:3], "substitutes": self.BENCH}
+        message = main.build_lineup_message(BARCA_FIXTURE, [lineup], [],
+                                            WATCHLIST, [])
+        self.assertIn("Bench: Szczesny, Garcia, Gavi", message)
 
 
 class TestEmptyDayAndTiming(unittest.TestCase):
