@@ -71,3 +71,5 @@ Edit `watchlist.json`:
 - Names are matched by last name. If a name matches more than one FPL player,
   that player is skipped until you add them to `player_clubs`.
 - "Not in the squad" only fires once the lineup is published.
+- The formation drawing currently supports 4-3-3 and 4-2-3-1. Other formations show a plain list
+  of names, and the log prints each player's ESPN slot number so a new layout can be added.

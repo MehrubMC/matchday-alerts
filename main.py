@@ -411,15 +411,6 @@ def find_omitted_players(team_lineup, player_clubs):
     return omitted
 
 
-def parse_formation(formation):
-    numbers = []
-    for part in str(formation).split("-"):
-        if not part.isdigit():
-            return []
-        numbers.append(int(part))
-    return numbers
-
-
 NAME_PARTS = ["de", "van", "ter", "von", "da", "dos", "di", "le", "el",
               "al", "mac"]
 
@@ -456,28 +447,41 @@ def bench_lines(substitutes, watched_names):
                          subsequent_indent="       ")
 
 
+FORMATION_LAYOUTS = {
+    "4-3-3": [[3, 6, 5, 2], [8, 7, 4], [11, 9, 10]],
+    "4-2-3-1": [[3, 6, 5, 2], [8, 4], [11, 10, 7], [9]],
+}
+
+
 def draw_formation(team_name, formation, starters, watched_names=None,
                    substitutes=None):
     if watched_names is None:
         watched_names = []
     if substitutes is None:
         substitutes = []
-    rows = parse_formation(formation)
-    if len(starters) != 11 or sum(rows) != 10:
+    layout = FORMATION_LAYOUTS.get(str(formation))
+    if layout is None or len(starters) != 11:
         return ""
 
-    names = []
+    labels = {}
     for entry in starters:
-        names.append(label_player(entry["player"]["name"], watched_names))
-    bench = bench_lines(substitutes, watched_names)
+        labels[entry.get("place", 0)] = label_player(entry["player"]["name"],
+                                                     watched_names)
+    needed = [1]
+    for row in layout:
+        needed = needed + row
+    for place in needed:
+        if place not in labels:
+            return ""
 
     row_texts = []
-    position = 1
-    for count in rows:
-        row_texts.append("   ".join(names[position:position + count]))
-        position = position + count
+    for row in layout:
+        names = []
+        for place in row:
+            names.append(labels[place])
+        row_texts.append("   ".join(names))
     row_texts.reverse()
-    row_texts.append(names[0])
+    row_texts.append(labels[1])
 
     width = 0
     for text in row_texts:
@@ -487,6 +491,7 @@ def draw_formation(team_name, formation, starters, watched_names=None,
     lines = ["```", team_name + " (" + str(formation) + ")", ""]
     for text in row_texts:
         lines.append(text.center(width).rstrip())
+    bench = bench_lines(substitutes, watched_names)
     if len(bench) > 0:
         lines.append("")
         lines = lines + bench
@@ -500,6 +505,16 @@ def draw_formation(team_name, formation, starters, watched_names=None,
         lines.append("* = on your watchlist")
     lines.append("```")
     return "\n".join(lines)
+
+
+def log_unknown_formation(team_name, formation, starters):
+    if len(starters) != 11 or str(formation) in FORMATION_LAYOUTS:
+        return
+    parts = []
+    for entry in starters:
+        parts.append(entry["player"]["name"] + "=" + str(entry.get("place", 0)))
+    log("No drawing layout for " + str(formation) + " (" + team_name
+        + "), showing a plain list. Places: " + ", ".join(parts))
 
 
 def build_lineup_message(fixture, lineups, flags, watchlist, player_clubs,
@@ -526,6 +541,8 @@ def build_lineup_message(fixture, lineups, flags, watchlist, player_clubs,
             if shape != "":
                 lines.append(shape)
             elif len(starters) > 0:
+                log_unknown_formation(team_name, team_lineup["formation"],
+                                      team_lineup["startXI"])
                 lines.append("**" + team_name + " XI** ("
                              + str(team_lineup["formation"]) + "): "
                              + ", ".join(starters))

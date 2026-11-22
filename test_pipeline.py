@@ -275,33 +275,57 @@ class TestClubInjuries(unittest.TestCase):
 
 def make_xi(names):
     xi = []
-    for name in names:
-        xi.append({"player": {"name": name}})
+    for number, name in enumerate(names):
+        xi.append({"player": {"name": name}, "place": number + 1})
     return xi
 
 
-FULL_XI = make_xi(["Joan Garcia", "Jules Kounde", "Pau Cubarsi",
-                   "Ronald Araujo", "Alejandro Balde", "Marc Casado",
-                   "Pedri", "Frenkie de Jong", "Lamine Yamal",
-                   "Robert Lewandowski", "Raphinha"])
+FULL_XI = make_xi(["Joan Garcia", "Eric Garcia", "Joao Cancelo", "Marc Bernal",
+                   "Frenkie de Jong", "Gerard Martin", "Fermin Lopez", "Pedri",
+                   "Raphinha", "Lamine Yamal", "Karim Adeyemi"])
+
+LIVERPOOL_XI = make_xi(["Alisson Becker", "Jeremie Araujo", "Milos Kerkez",
+                        "Alexis Mac Allister", "Jeremy Jacquet",
+                        "Virgil van Dijk", "Rayan Barcola",
+                        "Dominik Szoboszlai", "Alexander Isak",
+                        "Florian Wirtz", "Rio Ngumoha"])
 
 
 class TestFormationDrawing(unittest.TestCase):
-    def test_formation_is_split_into_numbers(self):
-        self.assertEqual(main.parse_formation("4-2-3-1"), [4, 2, 3, 1])
-        self.assertEqual(main.parse_formation("?"), [])
-
     def test_short_name_uses_last_word(self):
         self.assertEqual(main.short_name("Lamine Yamal"), "Yamal")
         self.assertEqual(main.short_name("Gavi"), "Gavi")
         self.assertEqual(main.short_name("Frenkie de Jong"), "de Jong")
 
-    def test_drawing_has_attackers_on_top_and_keeper_at_bottom(self):
+    def test_barcelona_433_is_drawn_left_to_right(self):
         shape = main.draw_formation("Barcelona", "4-3-3", FULL_XI)
         lines = shape.split("\n")
-        self.assertEqual(lines[1], "Barcelona (4-3-3)")
-        self.assertIn("Lewandowski", lines[3])
-        self.assertIn("Garcia", lines[len(lines) - 2])
+        self.assertEqual(lines[3].split(), ["Adeyemi", "Raphinha", "Yamal"])
+        self.assertEqual(lines[4].split(), ["Pedri", "Lopez", "Bernal"])
+        self.assertEqual(lines[5].split(),
+                         ["Cancelo", "Martin", "de", "Jong", "Garcia"])
+        self.assertEqual(lines[6].strip(), "Garcia")
+
+    def test_liverpool_4231_is_drawn_left_to_right(self):
+        shape = main.draw_formation("Liverpool", "4-2-3-1", LIVERPOOL_XI)
+        lines = shape.split("\n")
+        self.assertEqual(lines[3].strip(), "Isak")
+        self.assertEqual(lines[4].split(), ["Ngumoha", "Wirtz", "Barcola"])
+        self.assertEqual(lines[5].split(),
+                         ["Szoboszlai", "Mac", "Allister"])
+        self.assertEqual(lines[6].split(),
+                         ["Kerkez", "van", "Dijk", "Jacquet", "Araujo"])
+        self.assertEqual(lines[7].strip(), "Becker")
+
+    def test_formation_without_a_layout_is_not_drawn(self):
+        self.assertEqual(main.draw_formation("Barcelona", "4-4-2", FULL_XI), "")
+
+    def test_lineup_with_missing_places_is_not_drawn(self):
+        no_places = []
+        for entry in FULL_XI:
+            no_places.append({"player": entry["player"]})
+        self.assertEqual(main.draw_formation("Barcelona", "4-3-3", no_places),
+                         "")
 
     def test_incomplete_lineup_is_not_drawn(self):
         self.assertEqual(main.draw_formation("Barcelona", "4-3-3",
@@ -345,10 +369,10 @@ class TestWatchedMarkers(unittest.TestCase):
         self.assertNotIn("watchlist", shape)
 
     def test_team_with_watched_player_gets_a_drawing(self):
-        city_xi = make_xi(["Trafford", "O'Reilly", "Gvardiol", "Dias", "Lewis",
-                           "Gonzalez", "Foden", "Reijnders", "Silva",
-                           "Jeremy Doku", "Marmoush"])
-        lineup = {"team": {"name": "Manchester City"}, "formation": "4-1-4-1",
+        city_xi = make_xi(["Trafford", "Lewis", "O'Reilly", "Gonzalez", "Dias",
+                           "Gvardiol", "Silva", "Reijnders", "Marmoush",
+                           "Foden", "Jeremy Doku"])
+        lineup = {"team": {"name": "Manchester City"}, "formation": "4-2-3-1",
                   "startXI": city_xi, "substitutes": []}
         doku = {"name": "Doku", "team": "Man City", "status": "a", "news": "",
                 "chance": None}
